@@ -1,103 +1,177 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import CheckInCard from "@/components/CheckInCard";
+import QuickLog from "@/components/QuickLog";
+import TextCheckin from "@/components/TextCheckin";
+import VoiceCheckin from "@/components/VoiceCheckin";
+import { CalendarHeart, ChevronRight, Heart, Moon, Sparkles, Sun, Sunrise, Target } from "lucide-react";
+import { splitGoals } from "@/lib/goals";
+import { CADENCES, MODES, TRACKING_ITEMS } from "@/lib/tracking";
+import type { CheckIn, Mode, Profile } from "@/lib/types";
+
+const EVERYDAY_ENCOURAGEMENT = [
+  "Every check-in is a small act of care for yourself.",
+  "Progress isn't a straight line, and showing up still counts.",
+  "You don't have to be perfect. You just have to keep going, and you are.",
+  "Small steps, repeated, add up to big change.",
+  "Be as kind to yourself today as you would be to a good friend.",
+  "Noticing how you feel is a skill, and you're building it.",
+  "You've been working on this for a long time. That takes real strength.",
+];
+
+// A warm line that reflects the patient's own recent check-ins when possible.
+function encouragement(profile: Profile, sorted: CheckIn[]) {
+  const last = sorted[0];
+  if (!last) return "Welcome. Starting is often the hardest part, and you're already here.";
+
+  const daysSince = Math.floor((Date.now() - new Date(last.date).getTime()) / 86_400_000);
+  const cadenceDays = CADENCES.find((c) => c.id === profile.cadence)?.days ?? 7;
+  if (daysSince > cadenceDays * 2) return "Welcome back. No catching up needed; today is a fresh start.";
+
+  const mood = (last.entries.mood as { score?: number } | undefined)?.score;
+  if (mood != null && mood <= 2) return "Last time felt hard. Be gentle with yourself today. You're not doing this alone.";
+
+  const win = (last.entries.wins as { wins?: string[] } | undefined)?.wins?.[0];
+  if (win) return `Last time you shared a win: "${win}". That's worth celebrating.`;
+
+  const thisWeek = sorted.filter((c) => Date.now() - new Date(c.date).getTime() < 7 * 86_400_000).length;
+  if (thisWeek >= 3) return `${thisWeek} check-ins this week. You keep showing up for yourself, and it matters.`;
+
+  const day = Math.floor(Date.now() / 86_400_000);
+  return EVERYDAY_ENCOURAGEMENT[day % EVERYDAY_ENCOURAGEMENT.length];
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return { text: "Good morning", icon: Sunrise };
+  if (h < 17) return { text: "Good afternoon", icon: Sun };
+  return { text: "Good evening", icon: Moon };
+}
+
+function nextCheckInLabel(profile: Profile, last?: CheckIn) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (last && new Date(last.date) >= today) return "You've already checked in today. Nice work.";
+  const days = CADENCES.find((c) => c.id === profile.cadence)?.days;
+  if (days == null) return "Check in whenever it feels right";
+  if (!last) return "Your first check-in starts today";
+  const due = new Date(last.date);
+  due.setHours(0, 0, 0, 0);
+  due.setDate(due.getDate() + days);
+  if (due <= today) return "Today's a good day to check in";
+  return `Next check-in ${due.toLocaleDateString(undefined, { weekday: "long" })}, but anytime is welcome`;
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [mode, setMode] = useState<Mode>("voice");
+  const [latestId, setLatestId] = useState<string | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    (async () => {
+      const p = await fetch("/api/profile").then((r) => r.json());
+      if (!p) return router.push("/onboarding");
+      setProfile(p);
+      setMode(p.preferredMode);
+      setCheckIns(await fetch("/api/checkins").then((r) => r.json()));
+    })();
+  }, [router]);
+
+  if (!profile) return <p className="text-muted">Loading…</p>;
+
+  const tracked = TRACKING_ITEMS.filter((i) => profile.trackingItems.includes(i.id));
+  const sorted = [...checkIns].sort((a, b) => b.date.localeCompare(a.date));
+  const last = sorted[0];
+  const lastFollowUp = sorted.find((c) => c.followUp)?.followUp ?? "";
+
+  const added = (c: CheckIn) => {
+    setCheckIns((s) => [...s, c]);
+    setLatestId(c.id);
+  };
+  const extract = async (text: string, m: Mode) => {
+    const r = await fetch("/api/extract", { method: "POST", body: JSON.stringify({ text, mode: m }) });
+    if (!r.ok) return alert("Sorry, we couldn't save that check-in. Please try again.");
+    added(await r.json());
+  };
+  const saveQuick = async (entries: Record<string, unknown>) =>
+    added(await fetch("/api/checkins", { method: "POST", body: JSON.stringify({ entries, mode: "quick" }) }).then((r) => r.json()));
+
+  const latest = sorted.find((c) => c.id === latestId);
+
+  const hello = greeting();
+  const goals = splitGoals(profile.dietitianGoals);
+  const firstName = profile.name.trim().split(/\s+/)[0];
+
+  return (
+    <div className="space-y-5">
+      <section className="animate-rise">
+        <p className="flex items-center gap-1.5 text-sm text-muted"><hello.icon size={16} aria-hidden /> {hello.text}</p>
+        <h1 className="text-3xl font-semibold">{firstName}, how are you today?</h1>
+        <div className="mt-3 flex items-start gap-3 rounded-2xl bg-accent-soft/70 p-3.5">
+          <Heart size={18} className="mt-0.5 shrink-0 text-accent" fill="currentColor" aria-hidden />
+          <p className="text-[15px] leading-snug text-accent-strong">{encouragement(profile, sorted)}</p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-muted">
+          <CalendarHeart size={15} aria-hidden /> {nextCheckInLabel(profile, last)}
+        </p>
+      </section>
+
+      {goals.length > 0 && (
+        <Link href="/goals" className="flex items-center gap-3 rounded-2xl border border-line bg-card p-3 shadow-soft">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sage-soft text-sage"><Target size={18} aria-hidden /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sage">You&apos;re working on</p>
+            <p className="truncate text-sm">{goals.join(" · ")}</p>
+          </div>
+          <ChevronRight size={18} className="text-muted" aria-hidden />
+        </Link>
+      )}
+
+      <section className="rounded-3xl border border-line bg-card p-4 shadow-soft">
+        <div className="mb-4 grid grid-cols-3 gap-1 rounded-2xl bg-background p-1">
+          {MODES.map((m) => (
+            <button key={m.id} onClick={() => setMode(m.id)}
+              className={`flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-sm transition sm:flex-row sm:justify-center sm:gap-2 ${mode === m.id ? "bg-card font-semibold text-accent-strong shadow-soft" : "text-muted"}`}>
+              <m.icon size={18} strokeWidth={2} aria-hidden /> {m.label}
+            </button>
+          ))}
+        </div>
+        <p className="mb-2 text-center text-xs text-muted">{MODES.find((m) => m.id === mode)?.hint}</p>
+        {mode === "voice" && (
+          <VoiceCheckin
+            onDone={(t) => extract(t, "voice")}
+            dynamicVariables={{
+              patient_name: profile.name,
+              dietitian_name: profile.dietitianName || "your dietitian",
+              dietitian_goals: profile.dietitianGoals || "none set yet",
+              tracking_topics: tracked.map((i) => i.promptHint).join("; "),
+              last_followup: lastFollowUp || "This is our first check-in.",
+            }}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        )}
+        {mode === "text" && <TextCheckin topics={tracked.map((i) => i.label.toLowerCase())} onSubmit={(t) => extract(t, "text")} />}
+        {mode === "quick" && <QuickLog items={profile.trackingItems} goals={goals} onSave={saveQuick} />}
+      </section>
+
+      {latest && (
+        <section className="animate-rise space-y-2">
+          <div className="flex items-center gap-2 px-1">
+            <Sparkles size={18} className="text-honey" aria-hidden />
+            <h2 className="text-lg font-semibold">Thank you for checking in, {firstName}</h2>
+          </div>
+          <CheckInCard checkIn={latest} highlight />
+        </section>
+      )}
+
+      {sorted.length > 0 && (
+        <Link href="/history" className="flex items-center justify-center gap-1 text-sm text-muted hover:text-foreground">
+          Look back at your {sorted.length} check-ins <ChevronRight size={16} aria-hidden />
+        </Link>
+      )}
     </div>
   );
 }

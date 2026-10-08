@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // The dev "N" badge sits on top of the mobile bottom nav.
+  devIndicators: false,
 };
 
 export default nextConfig;

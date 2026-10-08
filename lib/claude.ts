@@ -1,0 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
+
+export const anthropic = new Anthropic();
+export const MODEL = process.env.CLAUDE_MODEL ?? "claude-sonnet-5-5";

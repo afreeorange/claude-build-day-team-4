@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fbf6ef;
+  --foreground: #2f2924;
+  --card: #ffffff;
+  --muted: #7a6f65;
+  --accent: #c4623f;
+  --accent-strong: #a94f30;
+  --accent-soft: #f9e6dc;
+  --sage: #5f8565;
+  --sage-soft: #e6efe3;
+  --honey: #b7832a;
+  --honey-soft: #fbefd6;
+  --sky: #4a7fa3;
+  --sky-soft: #e3eef5;
+  --lavender: #7c69a8;
+  --lavender-soft: #ece7f5;
+  --rose: #b85a6e;
+  --rose-soft: #f8e4e8;
+  --line: #ece2d5;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-sage: var(--sage);
+  --color-sage-soft: var(--sage-soft);
+  --color-honey: var(--honey);
+  --color-honey-soft: var(--honey-soft);
+  --color-sky: var(--sky);
+  --color-sky-soft: var(--sky-soft);
+  --color-lavender: var(--lavender);
+  --color-lavender-soft: var(--lavender-soft);
+  --color-rose: var(--rose);
+  --color-rose-soft: var(--rose-soft);
+  --color-line: var(--line);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-heading);
+  --shadow-soft: 0 1px 2px rgb(80 50 30 / 0.04), 0 4px 16px rgb(80 50 30 / 0.06);
+  --animate-breathe: breathe 2.4s ease-in-out infinite;
+  --animate-rise: rise 0.4s ease-out both;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.35; }
+  50% { transform: scale(1.18); opacity: 0; }
+}
+
+@keyframes rise {
+  from { transform: translateY(6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
 }
+
+h1, h2, h3 {
+  font-family: var(--font-heading), Georgia, serif;
+  letter-spacing: -0.01em;
+}
+
+button { cursor: pointer; }
+button:disabled { cursor: default; }

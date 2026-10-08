@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local demo state
+/data/profile.json
+/data/checkins.json
+!.env.local.example
+/data/goal-assessments.json
